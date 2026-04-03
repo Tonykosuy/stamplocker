@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StampLocker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Special+Elite&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================================
+           STAMPLOCKER — COFFEE JOURNAL EDITION
+           Rich espresso tones + cream pages + warm textures
+           ============================================================ */
+
+        :root {
+            --espresso:   #1c120d;
+            --dark-roast: #2e1f16;
+            --mocha:      #4a3222;
+            --latte:      #c4a882;
+            --cream:      #f5efe4;
+            --foam:       #faf7f0;
+            --caramel:    #b8864e;
+            --sugar:      #e8d5b7;
+            --ink:        #2a1a0f;
+            --gold:       #d4a84b;
+            --shadow:     rgba(44, 30, 18, .3);
+
+            --ivory:      var(--foam);
+            --kraft:      var(--sugar);
+            --sepia:      var(--mocha);
+            --sepia-light: var(--latte);
+        }
+
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+        body {
+            font-family: 'Special Elite', 'Courier New', monospace;
+            background: var(--espresso);
+            color: var(--ink);
+            display:flex; justify-content:center; align-items:center;
+            min-height:100vh; overflow:hidden;
+        }
+
+        .notebook-spine {
+            position:fixed;
+            left: calc(50% - 220px);
+            top:0; bottom:0; width:20px;
+            background: linear-gradient(
+                90deg,
+                var(--espresso) 0%,
+                var(--dark-roast) 25%,
+                var(--mocha) 50%,
+                var(--dark-roast) 75%,
+                var(--espresso) 100%
+            );
+            z-index:100;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.6), -2px 0 10px rgba(0,0,0,0.4);
+            border-right: 1px solid rgba(196,168,130,0.15);
+        }
+        .notebook-spine::before {
+            content:'';
+            position:absolute; top:0; left:50%; transform:translateX(-50%);
+            width:10px; height:100%;
+            background: repeating-linear-gradient(
+                180deg,
+                transparent 0px, transparent 55px,
+                var(--caramel) 55px, var(--caramel) 58px,
+                transparent 58px, transparent 62px,
+                var(--caramel) 62px, var(--caramel) 65px
+            );
+            opacity: 0.4;
+        }
+        .notebook-spine::after {
+            content:'';
+            position:absolute; top:0; right:-1px;
+            width:1px; height:100%;
+            background: linear-gradient(
+                180deg,
+                transparent 0%, var(--caramel) 10%, transparent 20%,
+                var(--caramel) 40%, transparent 50%,
+                var(--caramel) 70%, transparent 80%,
+                var(--caramel) 90%, transparent 100%
+            );
+            opacity:0.3;
+        }
+
+        #app {
+            width:100%; max-width:430px; height:100vh;
+            position:relative; overflow:hidden;
+            background: var(--foam);
+            border-left: 5px solid var(--mocha);
+            box-shadow:
+                -10px 0 40px rgba(0,0,0,0.5),
+                10px 0 30px rgba(0,0,0,0.2),
+                inset 4px 0 16px rgba(0,0,0,0.06);
+        }
+        #app::before {
+            content:'';
+            position:absolute; left:16px; top:0; bottom:0; width:0;
+            border-left: 2px dashed rgba(180,134,78,0.2);
+            z-index: 90;
+            pointer-events:none;
+        }
+        #app::after {
+            content:'';
+            position:absolute; inset:0; pointer-events:none; z-index:89;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 200px;
+            opacity: 0.035;
+        }
+
+        .screen {
+            position:absolute; inset:0;
+            display:flex; flex-direction:column;
+            visibility:hidden; opacity:0;
+            transition: opacity .4s ease, visibility 0s .4s;
+        }
+        .screen.active { visibility:visible; opacity:1; transition: opacity .4s ease, visibility 0s 0s; z-index:10; }
+
+        #screen-camera { background: var(--espresso); }
+        #camera-feed {
+            position:absolute; inset:0; width:100%; height:100%;
+            object-fit:cover; z-index:1;
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .viewfinder-svg {
+            position:absolute; inset:0; width:100%; height:100%;
+            z-index:10; pointer-events:none;
+        }
+        .frame-overlay {
+            position:absolute; pointer-events:none; z-index:12;
+            object-fit:contain; opacity:.85;
+            filter: drop-shadow(0 4px 12px rgba(0,0,0,.6));
+        }
+        .timestamp {
+            position:absolute; bottom:200px; right:16px; z-index:20;
+            font-family:'Courier New',monospace; font-size:10px;
+            color: var(--gold); opacity:.7; letter-spacing:1px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+        }
+        .flash {
+            position:absolute; inset:0; z-index:50;
+            background:#fff; opacity:0; pointer-events:none;
+            transition: opacity .05s;
+        }
+        .flash.fire { opacity:1; }
+        .countdown {
+            position:absolute; inset:0; z-index:45;
+            display:flex; align-items:center; justify-content:center;
+            font-family:'Special Elite', cursive; font-size:120px;
+            color: var(--gold);
+            text-shadow: 0 0 30px rgba(184,134,78,0.5);
+            pointer-events:none;
+        }
+        .stamp-effect {
+            position:absolute; inset:0; z-index:60;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(28, 18, 13, 0.4);
+            pointer-events:none;
+        }
+        .stamp-tool {
+            width:440px; height:440px;
+            background: url('2.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity:0;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5));
+        }
+        .stamp-effect.animate .stamp-tool {
+            animation: slamStampAggressive 3.0s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        #screen-camera.shake {
+            animation: screenShake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes slamStampAggressive {
+            0% { transform: translateY(100vh) scale(0.8) rotate(-5deg); opacity: 0; }
+            20% { transform: translateY(80vh) scale(1) rotate(-5deg); opacity: 1; }
+            70% { transform: translateY(0) scale(1.2) rotate(0deg); opacity: 1; }
+            75% { transform: translateY(-50px) scale(4) rotate(-10deg); opacity: 1; }
+            80% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+            95% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(20px) scale(1.1) rotate(5deg); opacity: 0; }
+        }
+        @keyframes screenShake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); }
+          20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+          40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        .zoom-bar {
+            position:absolute;
+            bottom: 160px; left:50%; transform:translateX(-50%);
+            z-index: 25;
+            display:flex; gap:4px;
+            background: rgba(28,18,13,0.55);
+            backdrop-filter: blur(16px) saturate(1.8);
+            -webkit-backdrop-filter: blur(16px) saturate(1.8);
+            border-radius: 20px;
+            padding: 3px 5px;
+            border: 1px solid rgba(196,168,130,0.12);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        .zoom-chip {
+            width:38px; height:26px; border:none; border-radius:16px;
+            background: transparent; color: rgba(245,239,228,0.5);
+            font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+            cursor:pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            letter-spacing: -0.3px;
+        }
+        .zoom-chip:active { transform: scale(0.88); }
+        .zoom-chip.active { background: var(--caramel); color: var(--foam); box-shadow: 0 2px 10px rgba(184,134,78,0.4); }
+        .cam-bar {
+            position:absolute; bottom:0; left:0; right:0; z-index:20;
+            height:140px; display:flex; justify-content:space-evenly; align-items:center;
+            padding-bottom:24px; background: linear-gradient(transparent, rgba(28,18,13,.7));
+        }
+        .cam-icon {
+            width:48px; height:48px; border:none; background:none;
+            color:rgba(245,239,228,.75); cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            transition: transform 0.2s ease, color 0.2s ease; border-radius:50%;
+        }
+        .cam-icon:hover { color: var(--caramel); }
+        .cam-icon:active { transform: scale(0.85); }
+        .cam-icon svg { width:24px; height:24px; }
+        .cam-icon.small svg { width:20px; height:20px; }
+        .shutter {
+            width:72px; height:72px; border-radius:50%;
+            border:4px solid rgba(245,239,228,.8); background:none; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+            transition: transform .15s, border-color .2s; box-shadow: 0 0 20px rgba(184,134,78,0.15);
+        }
+        .shutter:hover { border-color: var(--caramel); }
+        .shutter:active { transform:scale(.88); }
+        .shutter-ring {
+            width:56px; height:56px; border-radius:50%;
+            background: linear-gradient(145deg, rgba(245,239,228,.95), rgba(232,213,183,.9));
+            box-shadow: inset 0 2px 6px rgba(0,0,0,.12);
+        }
+        #screen-preview {
+            background: var(--foam);
+            background-image: radial-gradient(ellipse 120px 120px at 85% 15%, rgba(180,134,78,0.06) 0%, transparent 100%);
+        }
+        #screen-preview::before, #screen-book::before {
+            content:''; position:absolute; inset:0; pointer-events:none; z-index:0; opacity:.1;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 200px;
+        }
+        .preview-page { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 32px; position:relative; z-index:1; }
+        .preview-stamp-wrap {
+            filter: drop-shadow(0 18px 40px rgba(44,30,18,0.35)) drop-shadow(0 6px 16px rgba(44,30,18,.2));
+            animation: stampLand .5s cubic-bezier(.34,1.56,.64,1) both;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.4s ease; cursor: pointer;
+        }
+        .preview-stamp-wrap:hover {
+            transform: scale(1.04) translateY(-6px) rotate(0.5deg) !important;
+            filter: drop-shadow(0 28px 50px rgba(44,30,18,0.45)) drop-shadow(0 12px 24px rgba(44,30,18,.25));
+        }
+        @keyframes stampLand { 0% { transform: scale(1.4) rotate(-3deg) translateY(20px); opacity:0; } 100% { transform: scale(1) rotate(0) translateY(0); opacity:1; } }
+        #preview-img { max-width:100%; max-height:55vh; display:block; }
+        #caption {
+            width:100%; margin-top:28px; padding:12px 0; border:none; outline:none; resize:none;
+            background:transparent; font-family:'Caveat', cursive; font-size:22px;
+            text-align:center; color:var(--mocha); border-bottom: 1px dashed var(--latte);
+        }
+        #caption::placeholder { color: var(--latte); }
+        .preview-bar { display:flex; gap:12px; padding:12px 32px 36px; position:relative; z-index:1; }
+        .pill-btn {
+            flex:1; height:48px; border-radius:24px; border:none;
+            font-family:'Special Elite',monospace; font-size:14px;
+            cursor:pointer; letter-spacing:.5px;
+            transition: transform .2s, box-shadow .2s, background .2s;
+        }
+        .pill-btn:active { transform:scale(.96); }
+        .pill-btn.ghost { background:transparent; border:2px solid var(--latte); color:var(--mocha); }
+        .pill-btn.ghost:hover { border-color: var(--caramel); color: var(--caramel); }
+        .pill-btn.solid { background: linear-gradient(135deg, var(--mocha), var(--dark-roast)); color: var(--foam); box-shadow: 0 4px 16px var(--shadow); }
+        .pill-btn.solid:hover { box-shadow: 0 6px 24px rgba(44,30,18,.4); background: linear-gradient(135deg, #5a3a28, var(--mocha)); }
+        #screen-book {
+            background: var(--foam);
+            background-image:
+                radial-gradient(ellipse 80px 80px at 88% 12%, rgba(180,134,78,0.07) 0%, transparent 100%),
+                repeating-linear-gradient(transparent 0px, transparent 31px, rgba(140,120,90,0.12) 31px, rgba(140,120,90,0.12) 32px);
+            background-size: 100% 100%, 100% 32px; background-position: 0 0, 0 64px;
+        }
+        .book-header {
+            height:64px; display:flex; align-items:center; padding:0 16px;
+            position:relative; z-index:2; background: var(--foam);
+            border-bottom: 2px solid rgba(74,50,34,0.1); box-shadow: 0 2px 12px rgba(44,30,18,0.05);
+        }
+        .book-header .cam-icon { color:var(--mocha); }
+        .book-title { flex:1; text-align:center; font-family:'Special Elite',monospace; font-size:15px; text-transform:uppercase; letter-spacing:3px; color:var(--mocha); }
+        .book-scroll { flex:1; overflow-y:auto; padding:8px 20px 80px; position:relative; z-index:1; }
+        .book-scroll::before {
+            content:''; position: fixed; left: calc(50% - 215px + 38px); top:64px; bottom:0; width:0;
+            border-left: 2px solid rgba(184,134,78,0.12); z-index: 0; pointer-events:none;
+        }
+        .date-label { font-family:'Special Elite',monospace; font-size:11px; text-transform:uppercase; letter-spacing:2px; color:var(--latte); margin:28px 0 14px; padding-left:4px; }
+        .stamp-cluster { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; margin-bottom:16px; }
+        .stamp-card {
+            width:calc(50% - 6px); position:relative; filter: drop-shadow(0 6px 14px rgba(44,30,18,.22));
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.4s ease; cursor: pointer;
+        }
+        .stamp-card:hover { transform: scale(1.12) translateY(-8px) rotate(0deg) !important; filter: drop-shadow(0 20px 30px rgba(44,30,18,0.35)) drop-shadow(0 8px 15px rgba(44,30,18,.18)); z-index:30; }
+        .stamp-card img { width:100%; display:block; }
+        .stamp-card::before {
+            content:''; position:absolute; top:-6px; left:50%; transform:translateX(-50%) rotate(-2deg);
+            width:50px; height:18px; background: rgba(232,213,183,.5); border:1px solid rgba(180,134,78,.15);
+            border-radius:2px; z-index:2; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+        }
+        .stamp-card p { font-family:'Caveat',cursive; font-size:13px; text-align:center; margin-top:6px; color:var(--mocha); }
+        .book-empty { text-align:center; padding:60px 20px; font-family:'Caveat',cursive; font-size:20px; color:var(--latte); font-style:italic; }
+        .loader {
+            position:absolute; inset:0; z-index:999; background: rgba(250,247,240,.94);
+            backdrop-filter: blur(4px); display:flex; flex-direction:column; align-items:center; justify-content:center;
+        }
+        .loader p { font-family:'Special Elite',monospace; font-size:13px; color:var(--mocha); margin-top:16px; }
+        .loader-spinner { width:36px; height:36px; border:3px solid var(--sugar); border-top-color:var(--caramel); border-radius:50%; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .hide { display:none !important; }
+        @media (max-width: 480px) { .notebook-spine { display:none; } #app { border-left:none; } }
+    </style>
+</head>
+<body>
+    <div class="notebook-spine"></div>
+    <div id="app">
+        <div id="screen-camera" class="screen active">
+            <video id="camera-feed" autoplay playsinline muted></video>
+            <svg id="viewfinder-svg" class="viewfinder-svg" viewBox="0 0 1000 1500" preserveAspectRatio="none">
+                <defs>
+                    <clipPath id="clip-hole">
+                        <path id="perf-path" />
+                    </clipPath>
+                </defs>
+                <rect width="1000" height="1500" fill="rgba(0,0,0,.55)" />
+                <rect width="1000" height="1500" fill="rgba(0,0,0,.55)" clip-path="url(#clip-hole)" style="fill:transparent;" />
+                <use href="#perf-path" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3" />
+            </svg>
+            <img src="stamp_frame.png" id="frame-overlay" class="frame-overlay" alt="">
+            <div class="timestamp" id="live-ts"></div>
+            <div id="flash" class="flash"></div>
+            <div id="countdown" class="countdown hide"></div>
+            <div id="stamp-effect" class="stamp-effect hide">
+                <div class="stamp-tool"></div>
+            </div>
+            <div class="zoom-bar" id="zoom-bar">
+                <button class="zoom-chip active" data-zoom="1">1×</button>
+                <button class="zoom-chip" data-zoom="2">2×</button>
+                <button class="zoom-chip" data-zoom="3">3×</button>
+                <button class="zoom-chip" data-zoom="5">5×</button>
+            </div>
+            <div class="cam-bar">
+                <button id="btn-gallery" class="cam-icon" aria-label="Gallery">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M21 15l-5-5L5 21"/></svg>
+                </button>
+                <button id="btn-shutter" class="shutter" aria-label="Capture">
+                    <span class="shutter-ring"></span>
+                </button>
+                <button id="btn-flip" class="cam-icon" aria-label="Switch camera">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M20 7l-4-4-4 4M16 3v10M4 17l4 4 4-4M8 21V11"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="screen-preview" class="screen">
+            <div class="preview-page">
+                <div class="preview-stamp-wrap">
+                    <img id="preview-img" src="" alt="Your stamp">
+                </div>
+                <textarea id="caption" placeholder="Write something…" rows="2"></textarea>
+            </div>
+            <div class="preview-bar">
+                <button id="btn-retake" class="pill-btn ghost">Retake</button>
+                <button id="btn-save"   class="pill-btn solid" >Save to Book</button>
+            </div>
+        </div>
+        <div id="screen-book" class="screen">
+            <div class="book-header">
+                <button id="btn-back" class="cam-icon small" aria-label="Back">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
+                <h2 class="book-title">My Scrapbook</h2>
+                <span style="width:32px"></span>
+            </div>
+            <div id="book-scroll" class="book-scroll"></div>
+        </div>
+        <div id="loader" class="loader hide">
+            <div class="loader-spinner"></div>
+            <p>Saving…</p>
+        </div>
+    </div>
+    <canvas id="stamp-canvas" style="display:none"></canvas>
+    <audio id="shutter-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwYFtm4WnsNqqziM4oXD0eFhFIFBHj7AF1bOAZYHfjYzIvT7amOB6d8pnRlTiuWOCibcg/exec";
+
+        const $ = id => document.getElementById(id);
+        let screens, video, canvas, ctx, previewImg, captionEl, loader, flash, bookScroll, liveTs, perfPath;
+        let countdownEl, stampEffectEl, shutterSound;
+
+        let stream = null;
+        let facing = 'environment';
+        let base64 = null;
+        let currentZoom = 1;
+        let isCapturing = false;
+
+        const HOLE = { x: 156.95, y: 436.35, w: 686.07, h: 627.26 };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            screens    = { camera: $('screen-camera'), preview: $('screen-preview'), book: $('screen-book') };
+            video      = $('camera-feed');
+            canvas     = $('stamp-canvas');
+            ctx        = canvas.getContext('2d');
+            previewImg = $('preview-img');
+            captionEl  = $('caption');
+            loader     = $('loader');
+            flash      = $('flash');
+            bookScroll = $('book-scroll');
+            liveTs     = $('live-ts');
+            perfPath   = $('perf-path');
+            countdownEl = $('countdown');
+            stampEffectEl = $('stamp-effect');
+            shutterSound = $('shutter-sound');
+
+            generatePerforatedPath();
+            buildSVGOverlay();
+            positionFrameOverlay();
+            startCamera();
+            wireEvents();
+            tickTimestamp();
+
+            window.addEventListener('resize', positionFrameOverlay);
+        });
+
+        function positionFrameOverlay() {
+            const frameEl = $('frame-overlay');
+            if (!frameEl) return;
+            const scale = 1.3;
+            const overW = HOLE.w * scale;
+            const overH = HOLE.h * scale;
+            const overX = HOLE.x - (overW - HOLE.w) / 2;
+            const overY = HOLE.y - (overH - HOLE.h) / 2;
+            frameEl.style.left   = (overX / 1000 * 100) + '%';
+            frameEl.style.top    = (overY / 1500 * 100) + '%';
+            frameEl.style.width  = (overW / 1000 * 100) + '%';
+            frameEl.style.height = (overH / 1500 * 100) + '%';
+        }
+
+        function generatePerforatedPath() {
+            const d = perforatedRectPathData(HOLE.x, HOLE.y, HOLE.w, HOLE.h);
+            perfPath.setAttribute('d', d);
+        }
+
+        function buildSVGOverlay() {
+            const svg = $('viewfinder-svg');
+            while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);
+            const ns = 'http://www.w3.org/2000/svg';
+            const holeD = perfPath.getAttribute('d');
+            const mask = document.createElementNS(ns, 'path');
+            const outerRect = `M0,0 L1000,0 L1000,1500 L0,1500 Z`;
+            mask.setAttribute('d', outerRect + ' ' + holeD);
+            mask.setAttribute('fill-rule', 'evenodd');
+            mask.setAttribute('fill', 'rgba(0,0,0,0.55)');
+            svg.appendChild(mask);
+            const frame = document.createElementNS(ns, 'path');
+            frame.setAttribute('fill', '#f5efe4');
+            frame.setAttribute('filter', 'drop-shadow(0 5px 15px rgba(0,0,0,0.4))');
+            const pad = HOLE.w * 0.09;
+            const innerRectPath = `M ${HOLE.x + pad},${HOLE.y + pad} L ${HOLE.x + HOLE.w - pad},${HOLE.y + pad} L ${HOLE.x + HOLE.w - pad},${HOLE.y + HOLE.h - pad} L ${HOLE.x + pad},${HOLE.y + HOLE.h - pad} Z`;
+            frame.setAttribute('d', holeD + ' ' + innerRectPath);
+            frame.setAttribute('fill-rule', 'evenodd');
+            svg.appendChild(frame);
+        }
+
+        function perforatedRectPathData(x, y, w, h) {
+            const r = 20; const gap = 64;
+            const nx = Math.floor(w / gap); const ny = Math.floor(h / gap);
+            const stepX = w / nx; const stepY = h / ny;
+            let d = `M ${x},${y}`;
+            for (let i = 0; i < nx; i++) { const cx = x + i * stepX + stepX / 2; d += ` L ${cx - r},${y} A ${r},${r} 0 0 1 ${cx + r},${y}`; }
+            d += ` L ${x + w},${y}`;
+            for (let i = 0; i < ny; i++) { const cy = y + i * stepY + stepY / 2; d += ` L ${x + w},${cy - r} A ${r},${r} 0 0 1 ${x + w},${cy + r}`; }
+            d += ` L ${x + w},${y + h}`;
+            for (let i = nx - 1; i >= 0; i--) { const cx = x + i * stepX + stepX / 2; d += ` L ${cx + r},${y + h} A ${r},${r} 0 0 1 ${cx - r},${y + h}`; }
+            d += ` L ${x},${y + h}`;
+            for (let i = ny - 1; i >= 0; i--) { const cy = y + i * stepY + stepY / 2; d += ` L ${x},${cy + r} A ${r},${r} 0 0 1 ${x},${cy - r}`; }
+            d += ` Z`;
+            return d;
+        }
+
+        async function startCamera() {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+                video.srcObject = stream;
+            } catch (e) {
+                console.error(e);
+                alert('Cannot access camera.');
+            }
+        }
+
+        function flipCamera() { facing = facing === 'environment' ? 'user' : 'environment'; currentZoom = 1; startCamera().then(() => applyZoom(1)); }
+        function applyZoom(level) {
+            currentZoom = level;
+            document.querySelectorAll('.zoom-chip').forEach(c => { c.classList.toggle('active', Number(c.dataset.zoom) === level); });
+            if (stream) {
+                const track = stream.getVideoTracks()[0];
+                if (track) {
+                    const caps = track.getCapabilities ? track.getCapabilities() : {};
+                    if (caps.zoom) {
+                        const maxHW = caps.zoom.max || 1;
+                        const clampedZoom = Math.min(level, maxHW);
+                        track.applyConstraints({ advanced: [{ zoom: clampedZoom }] }).catch(() => {});
+                        if (clampedZoom >= level) { video.style.transform = 'none'; return; }
+                        const cssZoom = level / clampedZoom;
+                        video.style.transform = `scale(${cssZoom})`;
+                        return;
+                    }
+                }
+            }
+            video.style.transform = level === 1 ? 'none' : `scale(${level})`;
+        }
+        function setZoom(level) { applyZoom(level); }
+        function tickTimestamp() {
+            const fmt = () => { const d = new Date(); return d.toLocaleString('en-US', { month:'short', day:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).toUpperCase(); };
+            liveTs.textContent = fmt(); setInterval(() => liveTs.textContent = fmt(), 1000);
+        }
+
+        function capture() {
+            if (isCapturing) return; isCapturing = true;
+            let timeLeft = 3;
+            countdownEl.classList.remove('hide');
+            countdownEl.textContent = timeLeft;
+            const timer = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) { countdownEl.textContent = timeLeft; } else { clearInterval(timer); countdownEl.classList.add('hide'); executeCapture(); }
+            }, 1000);
+        }
+
+        function executeCapture() {
+            stampEffectEl.classList.remove('hide');
+            stampEffectEl.classList.add('animate');
+            setTimeout(() => {
+                shutterSound.currentTime = 0;
+                shutterSound.play().catch(e => console.warn("Sound blocked"));
+                screens.camera.classList.add('shake');
+                flash.classList.add('fire');
+                setTimeout(() => flash.classList.remove('fire'), 180);
+                performCanvasDrawing();
+                setTimeout(() => screens.camera.classList.remove('shake'), 300);
+            }, 2400);
+            setTimeout(() => { stampEffectEl.classList.remove('animate'); stampEffectEl.classList.add('hide'); showScreen('preview'); isCapturing = false; }, 3200);
+        }
+
+        function performCanvasDrawing() {
+            const vW = video.videoWidth; const vH = video.videoHeight;
+            const svgRect = $('viewfinder-svg').getBoundingClientRect();
+            const containerW = svgRect.width; const containerH = svgRect.height;
+            const pad = HOLE.w * 0.09;
+            const innerX = HOLE.x + pad; const innerY = HOLE.y + pad; const innerW = HOLE.w - pad * 2; const innerH = HOLE.h - pad * 2;
+            const fracX = innerX / 1000; const fracY = innerY / 1500; const fracW = innerW / 1000; const fracH = innerH / 1500;
+            const holeScreenX = containerW * fracX; const holeScreenY = containerH * fracY; const holeScreenW = containerW * fracW; const holeScreenH = containerH * fracH;
+            const vidRatio = vW / vH; const containerRatio = containerW / containerH;
+            let renderedW, renderedH, cropX, cropY;
+            if (vidRatio > containerRatio) { renderedH = containerH; renderedW = containerH * vidRatio; cropX = (renderedW - containerW) / 2; cropY = 0; } else { renderedW = containerW; renderedH = containerW / vidRatio; cropX = 0; cropY = (renderedH - containerH) / 2; }
+            const bufferScale = vW / renderedW;
+            let sX = (holeScreenX + cropX) * bufferScale; let sY = (holeScreenY + cropY) * bufferScale; let sW = holeScreenW * bufferScale; let sH = holeScreenH * bufferScale;
+            if (currentZoom > 1) { const zoomedW = sW / currentZoom; const zoomedH = sH / currentZoom; sX = sX + (sW - zoomedW) / 2; sY = sY + (sH - zoomedH) / 2; sW = zoomedW; sH = zoomedH; }
+            const PHOTO_W = 900; const photoRatio = sH / sW; const PHOTO_H = Math.round(PHOTO_W * photoRatio); const MARGIN = Math.round(PHOTO_W * 0.08);
+            const cW = PHOTO_W + MARGIN * 2; const cH = PHOTO_H + MARGIN * 2;
+            canvas.width = cW; canvas.height = cH; ctx.clearRect(0, 0, cW, cH);
+            buildCanvasPerforatedPath(ctx, 0, 0, cW, cH); ctx.clip();
+            ctx.fillStyle = '#f5efe4'; ctx.fillRect(0, 0, cW, cH);
+            ctx.save();
+            if (facing === 'user') { ctx.translate(cW, 0); ctx.scale(-1, 1); }
+            ctx.drawImage(video, sX, sY, sW, sH, MARGIN, MARGIN, PHOTO_W, PHOTO_H);
+            ctx.restore();
+            ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(44, 30, 18, 0.12)'; ctx.strokeRect(MARGIN, MARGIN, PHOTO_W, PHOTO_H);
+            base64 = canvas.toDataURL('image/png'); previewImg.src = base64;
+        }
+
+        function buildCanvasPerforatedPath(ctx, x, y, w, h) {
+            const r = 28; const gap = 90;
+            const nx = Math.floor(w / gap); const ny = Math.floor(h / gap);
+            const stepX = w / nx; const stepY = h / ny;
+            ctx.beginPath(); ctx.moveTo(x, y);
+            for (let i = 0; i < nx; i++) { const cx = x + i * stepX + stepX / 2; ctx.lineTo(cx - r, y); ctx.arc(cx, y, r, Math.PI, 0, true); }
+            ctx.lineTo(x + w, y);
+            for (let i = 0; i < ny; i++) { const cy = y + i * stepY + stepY / 2; ctx.lineTo(x + w, cy - r); ctx.arc(x + w, cy, r, -Math.PI/2, Math.PI/2, true); }
+            ctx.lineTo(x + w, y + h);
+            for (let i = nx - 1; i >= 0; i--) { const cx = x + i * stepX + stepX / 2; ctx.lineTo(cx + r, y + h); ctx.arc(cx, y + h, r, 0, Math.PI, true); }
+            ctx.lineTo(x, y + h);
+            for (let i = ny - 1; i >= 0; i--) { const cy = y + i * stepY + stepY / 2; ctx.lineTo(x, cy + r); ctx.arc(x, cy, r, Math.PI/2, -Math.PI/2, true); }
+            ctx.closePath();
+        }
+
+        function showScreen(name) { Object.values(screens).forEach(s => s.classList.remove('active')); screens[name].classList.add('active'); if (name === 'book') loadGallery(); }
+
+        async function saveToBook() {
+            if (SCRIPT_URL === "") { alert("Set SCRIPT_URL first."); return; }
+            loader.classList.remove('hide');
+            try {
+                const thumbCanvas = document.createElement('canvas'); const tCtx = thumbCanvas.getContext('2d');
+                const targetW = 380; const targetH = Math.round(targetW * (canvas.height / canvas.width));
+                thumbCanvas.width = targetW; thumbCanvas.height = targetH;
+                tCtx.drawImage(canvas, 0, 0, targetW, targetH);
+                const sheetSafeBase64 = thumbCanvas.toDataURL('image/jpeg', 0.5);
+                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ imageBase64: sheetSafeBase64, caption: captionEl.value.trim(), timestamp: new Date().toISOString() }) });
+                captionEl.value = ''; showScreen('book');
+            } catch (e) { alert('Save failed.'); } finally { loader.classList.add('hide'); }
+        }
+
+        async function loadGallery() {
+            if (SCRIPT_URL === "") { bookScroll.innerHTML = '<div class="book-empty">No stamps yet.<br>Go capture a memory!</div>'; return; }
+            try { const res = await fetch(SCRIPT_URL); const data = await res.json(); renderBook(data); } catch (e) { console.error(e); }
+        }
+
+        function renderBook(data) {
+            if (!data || !data.length) { bookScroll.innerHTML = '<div class="book-empty">No stamps yet.<br>Go capture a memory!</div>'; return; }
+            data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            const groups = {}; const now = new Date(); const todayStr = now.toDateString();
+            const yestDate = new Date(now); yestDate.setDate(now.getDate() - 1); const yestStr = yestDate.toDateString();
+            data.forEach(item => {
+                const d = new Date(item.timestamp); const ds = d.toDateString();
+                let label; if (ds === todayStr) label = 'Today'; else if (ds === yestStr) label = 'Yesterday'; else label = d.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' });
+                (groups[label] ||= []).push(item);
+            });
+            let html = '';
+            for (const [label, items] of Object.entries(groups)) {
+                html += `<div class="date-label">${label}</div><div class="stamp-cluster">`;
+                items.forEach(item => { const rot = (Math.random() * 6 - 3).toFixed(1); html += `<div class="stamp-card" style="transform:rotate(${rot}deg)"><img src="${item.data}" loading="lazy">`; if (item.caption) html += `<p>${item.caption}</p>`; html += `</div>`; });
+                html += `</div>`;
+            }
+            bookScroll.innerHTML = html;
+        }
+
+        function wireEvents() {
+            $('btn-shutter').addEventListener('click', capture);
+            $('btn-flip').addEventListener('click', flipCamera);
+            $('btn-gallery').addEventListener('click', () => showScreen('book'));
+            $('btn-retake').addEventListener('click', () => { base64 = null; captionEl.value = ''; showScreen('camera'); });
+            $('btn-save').addEventListener('click', saveToBook);
+            $('btn-back').addEventListener('click', () => showScreen('camera'));
+            document.querySelectorAll('.zoom-chip').forEach(chip => { chip.addEventListener('click', () => { const level = Number(chip.dataset.zoom); setZoom(level); }); });
+        }
+    </script>
+</body>
+</html>
